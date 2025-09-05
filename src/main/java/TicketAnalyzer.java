@@ -5,6 +5,10 @@ import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class TicketAnalyzer {
@@ -60,11 +64,13 @@ public class TicketAnalyzer {
 
             // Проверяем маршрут Владивосток -> Тель-Авив
             if ("VVO".equals(origin) && "TLV".equals(destination)) {
+                String departureDate = ticket.get("departure_date").getAsString();
                 String departureTime = ticket.get("departure_time").getAsString();
+                String arrivalDate = ticket.get("arrival_date").getAsString();
                 String arrivalTime = ticket.get("arrival_time").getAsString();
 
                 // Длительность полета в минутах
-                int flightDuration = calculateFlightDuration(departureTime, arrivalTime);
+                int flightDuration = calculateFlightDuration(departureDate, departureTime, arrivalDate, arrivalTime);
 
                 // Обновляем минимальное время для перевозчика
                 minTimes.putIfAbsent(carrier, Integer.MAX_VALUE);
@@ -78,30 +84,31 @@ public class TicketAnalyzer {
     }
 
     // Метод для расчёта продолжительности полёта
-    private static int calculateFlightDuration(String departure, String arrival) {
+    private static int calculateFlightDuration(String departureDate, String departureTime,
+                                               String arrivalDate, String arrivalTime) {
         try {
-            // Разбиваем время на часы и минуты
-            String[] depParts = departure.split(":");
-            String[] arrParts = arrival.split(":");
+            // Парсим отдельно даты и время
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yy");
+            DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("H:mm");
 
-            // Преобразуем строки в числа
-            int depHours = Integer.parseInt(depParts[0]);
-            int depMinutes = Integer.parseInt(depParts[1]);
-            int arrHours = Integer.parseInt(arrParts[0]);
-            int arrMinutes = Integer.parseInt(arrParts[1]);
+            LocalDate depDate = LocalDate.parse(departureDate, dateFormatter);
+            LocalDate arrDate = LocalDate.parse(arrivalDate, dateFormatter);
 
-            // Преобразуем время в общее количество минут
-            int totalDepMinutes = depHours * 60 + depMinutes;
-            int totalArrMinutes = arrHours * 60 + arrMinutes;
+            LocalTime depTime = LocalTime.parse(departureTime, timeFormatter);
+            LocalTime arrTime = LocalTime.parse(arrivalTime, timeFormatter);
 
-            // Если время прибытия меньше времени вылета, добавляем 24 часа
-            if (totalArrMinutes < totalDepMinutes) {
-                totalArrMinutes += 24 * 60;
-            }
+            // Собираем LocalDateTime
+            LocalDateTime departureDateTime = LocalDateTime.of(depDate, depTime);
+            LocalDateTime arrivalDateTime = LocalDateTime.of(arrDate, arrTime);
 
-            return totalArrMinutes - totalDepMinutes;
+            // Вычисляем разницу в минутах
+            long durationMinutes = java.time.Duration.between(departureDateTime, arrivalDateTime)
+                    .toMinutes();
+
+            return (int) durationMinutes;
 
         } catch (Exception e) {
+            System.err.println("Ошибка при расчёте длительности полёта: " + e.getMessage());
             return Integer.MAX_VALUE;
         }
     }
